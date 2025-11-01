@@ -6,6 +6,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from .models import Profile
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth import authenticate
+from django.views.decorators.http import require_http_methods
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from django.http import JsonResponse
 import json
 
 
@@ -78,3 +83,57 @@ def list_users(request):
         })
 
     return JsonResponse(users_list, safe=False, status=200)
+
+@csrf_exempt
+def login(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST request required'}, status=400)
+
+    data = json.loads(request.body)
+    username = data.get('username')
+    password = data.get('password')
+
+    user = authenticate(username=username, password=password)
+    if user:
+        refresh = RefreshToken.for_user(user)
+        return JsonResponse({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token)
+        })
+    else:
+        return JsonResponse({'error': 'Invalid credentials'}, status=400)
+    
+@csrf_exempt
+def my_profile(request, user_id):
+    try:
+        profile = Profile.objects.get(user__id=user_id)
+    except Profile.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    return JsonResponse({
+        'id': profile.user.id,
+        'username': profile.user.username,
+        'role': profile.role,
+        'age': profile.age,
+        'marital_status': profile.marital_status,
+        'balance': profile.balance,
+        'tenure': profile.tenure
+    })
+    
+@csrf_exempt
+@require_http_methods(["PUT"])
+def update_profile(request, user_id):
+    try:
+        profile = Profile.objects.get(user__id=user_id)
+    except Profile.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    data = json.loads(request.body)
+    # Only allow customer to update their own fields
+    profile.age = data.get('age', profile.age)
+    profile.marital_status = data.get('marital_status', profile.marital_status)
+    profile.balance = data.get('balance', profile.balance)
+    profile.tenure = data.get('tenure', profile.tenure)
+    profile.save()
+
+    return JsonResponse({'message': 'Profile updated successfully'})
