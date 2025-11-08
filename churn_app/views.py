@@ -4,7 +4,6 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
-from .models import Profile
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth import authenticate
 from django.views.decorators.http import require_http_methods
@@ -16,9 +15,51 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from .models import Profile, Transaction
+from django.db import transaction as db_transaction
 import json
 
-
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_transaction(request):
+    data = request.data
+    sender = request.user
+    try:
+        recipient = User.objects.get(id=data['recipient_id'])
+    except User.DoesNotExist:
+        return Response({'error': 'Recipient not found'}, status=404)
+    
+    amount = data['amount']
+    action = data['action']  # transfer, deposit, withdraw
+    
+    sender_profile = Profile.objects.get(user=sender)
+    recipient_profile = Profile.objects.get(user=recipient)
+    
+    with db_transaction.atomic():  # ensures all succeed or none
+        if action == 'transfer':
+            if sender_profile.balance < amount:
+                return Response({'error': 'Insufficient balance'}, status=400)
+            sender_profile.balance -= amount
+            recipient_profile.balance += amount
+            sender_profile.save()
+            recipient_profile.save()
+        elif action == 'deposit':
+            sender_profile.balance += amount
+            sender_profile.save()
+        elif action == 'withdraw':
+            if sender_profile.balance < amount:
+                return Response({'error': 'Insufficient balance'}, status=400)
+            sender_profile.balance -= amount
+            sender_profile.save()
+        
+        Transaction.objects.create(
+            sender=sender,
+            recipient=recipient if action=='transfer' else None,
+            amount=amount,
+            action=action
+        )
+    
+    return Response({'message': 'Transaction completed successfully'})
       
 @api_view(['POST'])
 @permission_classes([AllowAny])
