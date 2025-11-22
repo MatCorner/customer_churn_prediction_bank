@@ -1,6 +1,6 @@
 customer_churn_prediction_bank/      # Project root
 │
-├── churn_app/                       # Your app
+├── churn_app/                       # app
 │   ├── migrations/
 │   ├── models.py                    # Database models
 │   ├── views.py                     # Controllers (handle requests)
@@ -11,8 +11,8 @@ customer_churn_prediction_bank/      # Project root
 │   ├── settings.py
 │   └── urls.py                      # Project-level routes
 │
-├── static/                           # Optional: front-end static files
-├── templates/                        # Optional: front-end HTML templates
+├── static/                           # front-end static files
+├── templates/                        # front-end HTML templates
 ├── db.sqlite3                        # Database (if using SQLite)
 ├── manage.py
 └── README.md
