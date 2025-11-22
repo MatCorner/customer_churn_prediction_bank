@@ -17,50 +17,142 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .models import Profile, Transaction
 from django.db import transaction as db_transaction
+from decimal import Decimal
 import json
 
+# 进行交易
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_transaction(request):
     data = request.data
-    sender = request.user
+    action = data.get('action')
     try:
-        recipient = User.objects.get(id=data['recipient_id'])
-    except User.DoesNotExist:
-        return Response({'error': 'Recipient not found'}, status=404)
-    
-    amount = data['amount']
-    action = data['action']  # transfer, deposit, withdraw
-    
-    sender_profile = Profile.objects.get(user=sender)
-    recipient_profile = Profile.objects.get(user=recipient)
-    
-    with db_transaction.atomic():  # ensures all succeed or none
-        if action == 'transfer':
+        amount = Decimal(str(data.get('amount')))
+    except:
+        return Response({"error": "Invalid amount"}, status=400)
+
+    recipient_username = data.get('recipient')
+
+    with db_transaction.atomic():
+        sender_profile = Profile.objects.select_for_update().get(user=request.user)
+
+        recipient_profile = None
+        if action == "transfer":
+            if not recipient_username:
+                return Response({"error": "Recipient username required"}, status=400)
+            try:
+                recipient_user = User.objects.get(username=recipient_username)
+                recipient_profile = Profile.objects.select_for_update().get(user=recipient_user)
+            except User.DoesNotExist:
+                return Response({"error": "Recipient not found"}, status=404)
+
             if sender_profile.balance < amount:
-                return Response({'error': 'Insufficient balance'}, status=400)
+                return Response({"error": "Insufficient balance"}, status=400)
+
             sender_profile.balance -= amount
             recipient_profile.balance += amount
             sender_profile.save()
             recipient_profile.save()
-        elif action == 'deposit':
+
+        elif action == "deposit":
             sender_profile.balance += amount
             sender_profile.save()
-        elif action == 'withdraw':
+
+        elif action == "withdraw":
             if sender_profile.balance < amount:
-                return Response({'error': 'Insufficient balance'}, status=400)
+                return Response({"error": "Insufficient balance"}, status=400)
             sender_profile.balance -= amount
             sender_profile.save()
-        
+
+        else:
+            return Response({"error": "Invalid action"}, status=400)
+
         Transaction.objects.create(
-            sender=sender,
-            recipient=recipient if action=='transfer' else None,
+            sender=sender_profile.user,
+            recipient=recipient_profile.user if recipient_profile else None,
             amount=amount,
             action=action
         )
-    
-    return Response({'message': 'Transaction completed successfully'})
-      
+
+    return Response({"message": f"{action.capitalize()} successful!"})
+
+
+# 用户查看自己的交易
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_transactions(request):
+    profile = Profile.objects.get(user=request.user)
+
+    transactions = Transaction.objects.filter(
+        sender=profile
+    ) | Transaction.objects.filter(
+        recipient=profile
+    )
+
+    data = []
+    for t in transactions.order_by('-timestamp'):
+        data.append({
+            "id": t.id,
+            "action": t.action,
+            "amount": str(t.amount),
+            "sender": t.sender.user.username if t.sender else None,
+            "recipient": t.recipient.user.username if t.recipient else None,
+            "time": t.timestamp,
+        })
+
+    return Response(data)
+
+# 管理员查看所有的交易
+# 需要加按id查看的功能
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def all_transactions(request):
+    admin_profile = Profile.objects.get(user=request.user)
+
+    if admin_profile.role != 'manager':
+        return Response({"error": "Permission denied"}, status=403)
+
+    transactions = Transaction.objects.all().order_by('-timestamp')
+
+    data = []
+    for t in transactions:
+        data.append({
+            "id": t.id,
+            "action": t.action,
+            "amount": str(t.amount),
+            "sender": t.sender.username if t.sender else None,
+            "recipient": t.recipient.username if t.recipient else None,
+            "time": t.created_at
+        })
+
+    return Response(data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def transaction_detail(request, transaction_id):
+    try:
+        t = Transaction.objects.get(id=transaction_id)
+    except Transaction.DoesNotExist:
+        return Response({"error": "Transaction not found"}, status=404)
+
+    profile = Profile.objects.get(user=request.user)
+
+    # 客户只能查看自己的交易
+    if profile.role == 'customer' and t.sender != request.user and t.recipient != request.user:
+        return Response({"error": "Permission denied"}, status=403)
+
+    data = {
+        "id": t.id,
+        "action": t.action,
+        "amount": str(t.amount),
+        "sender": t.sender.username if t.sender else None,
+        "recipient": t.recipient.username if t.recipient else None,
+        "time": t.created_at
+    }
+    return Response(data)
+
+
+# 注册    
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -93,6 +185,7 @@ def register(request):
         'user_id': user.id
     }, status=201)
 
+# 管理员查看所有的用户
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_users(request):
@@ -134,6 +227,7 @@ def list_users(request):
 
     return Response(users_list)
 
+# 登录
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
@@ -152,7 +246,8 @@ def login(request):
         })
     else:
         return Response({'error': 'Invalid credentials'}, status=400)
-    
+ 
+# 用户查看自己的档案   
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_profile(request, user_id):
@@ -176,7 +271,38 @@ def my_profile(request, user_id):
         'balance': profile.balance,
         'tenure': profile.tenure
     })
-    
+
+# 用户查看自己的余额 功能是否和my_profile有一定重复？
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_balance(request):
+    profile = Profile.objects.get(user=request.user)
+    return Response({
+        "username": profile.user.username,
+        "balance": profile.balance
+    })
+
+# 管理员查看特定用户的余额 
+# 该功能仅作测试用
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_balance(request, user_id):
+    admin_profile = Profile.objects.get(user=request.user)
+    if admin_profile.role != 'manager':
+        return Response({"error": "Permission denied"}, status=403)
+
+    try:
+        profile = Profile.objects.get(user__id=user_id)
+    except Profile.DoesNotExist:
+        return Response({"error": "User not found"}, 404)
+
+    return Response({
+        "username": profile.user.username,
+        "balance": profile.balance
+    })
+
+# 用户更新档案
+# 管理员是否能直接更新档案    
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def update_profile(request, user_id):
@@ -213,3 +339,27 @@ def update_profile(request, user_id):
             'tenure': profile.tenure
         }
     })
+    
+# 流失预测模型示例
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+# def churn_prediction(request):
+#     profile = Profile.objects.get(user=request.user)
+
+#     # 特征工程（示例）
+#     num_transactions = Transaction.objects.filter(sender=profile).count()
+
+#     features = {
+#         "age": profile.age,
+#         "balance": float(profile.balance),
+#         "tenure": profile.tenure,
+#         "num_transactions": num_transactions,
+#     }
+
+#     from .ml.churn_predictor import predict_churn
+#     prob = predict_churn(features)
+
+#     return Response({
+#         "username": profile.user.username,
+#         "churn_probability": prob
+#     })
