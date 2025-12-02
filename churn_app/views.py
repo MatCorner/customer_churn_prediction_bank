@@ -8,7 +8,9 @@ from .models import Client, Staff, DebitCard, CreditCard, Transaction
 from decimal import Decimal
 from django.db import transaction as db_transaction
 from .utils import predict_churn_dummy
-      
+
+
+# User Register & Login
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -45,6 +47,8 @@ def login_view(request):
 
     return Response({"message": "Login successful", "username": username})
 
+
+# Profile
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_profile(request):
@@ -94,6 +98,8 @@ def update_profile(request):
 
     return Response({"error": "User has no profile role"}, status=400)
 
+
+# Create Debit / Credit Card
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_account(request):
@@ -131,6 +137,8 @@ def create_account(request):
 
     return Response({"error": "Invalid account type"}, status=400)
 
+
+# Transaction (deposit / withdraw / transfer)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_transaction(request):
@@ -185,7 +193,8 @@ def create_transaction(request):
 
     return Response({"message": f"{action} successful"})
 
-# staff
+
+# Staff: List users
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_users(request):
@@ -218,7 +227,9 @@ def list_users(request):
 
     return Response(data)
 
-# staff views all accounts
+
+
+# Staff: List all accounts
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_accounts(request):
@@ -246,7 +257,9 @@ def list_accounts(request):
 
     return Response(data)
 
-# staff views transaction
+
+
+# Staff: All transaction history
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def transaction_history(request):
@@ -269,7 +282,9 @@ def transaction_history(request):
 
     return Response(data)
 
-# user views transaction
+
+
+# Client: My Transactions
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_transactions(request):
