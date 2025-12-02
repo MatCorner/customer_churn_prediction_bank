@@ -251,7 +251,6 @@ class Transaction(models.Model):
     create_time = models.DateTimeField(
         null=False, 
         auto_now_add=True, 
-        default=timezone.now,  # 新增默认值
         verbose_name="交易创建时间"
     )
     end_time = models.DateTimeField(
