@@ -68,9 +68,7 @@
 |target_card_no|VARCHAR(16)|交易的目标方卡号|如果交易类型为存款和取款，则为NULL，否则必须写上相应的对手方卡号|
 |transaction_type|VARCHAR(10)|交易类型('remit', '汇款'), ('receive', '收款'), ('withdraw', '取款'), ('deposit', '存款')|枚举约束（仅允许指定值）；最大长度 10 字符；不可为空|
 |amount|DECIMAL(12,2)|交易金额|精度约束（12 位数字，2 位小数）；建议设置默认值0.0，不可为空|
-|create_time|DATETIME|交易创建的时间
-
-|自动记录创建时间（插入时填充）；不可为空|
+|create_time|DATETIME|交易创建的时间|自动记录创建时间（插入时填充）；不可为空|
 |end_time|DATETIME|交易结束的时间|可为空（处理中的交易无结束时间）；交易状态变更为成功 / 失败时更新|
 |status|VARCHAR(10)|交易状态（'success' 成功、'failed' 失败、'cancelled' 取消）|枚举约束（仅允许指定值）；最大长度 10 字符；不可为空；默认值null|
 
