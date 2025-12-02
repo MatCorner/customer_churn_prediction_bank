@@ -3,8 +3,8 @@ from django.utils import timezone
 
 # -------------------------- 1. User 表（用户超类）--------------------------
 class User(models.Model):
-    user_id = models.BigAutoField(primary_key=True, verbose_name="用户唯一ID")
-    username = models.CharField(max_length=50, unique=True, null=False, verbose_name="用户名（登录用）")
+    user_id = models.BigAutoField(primary_key=True, verbose_name="用户ID")
+    username = models.CharField(max_length=50, unique=True, null=False, verbose_name="用户名")
     password = models.CharField(max_length=100, null=False, verbose_name="密码")
     create_time = models.DateTimeField(
         null=False, 
@@ -27,7 +27,7 @@ class User(models.Model):
 
 # -------------------------- 2. Client 表（客户子类，关联User）--------------------------
 class Client(models.Model):
-    client_id = models.BigAutoField(primary_key=True, verbose_name="客户唯一ID")
+    client_id = models.BigAutoField(primary_key=True, verbose_name="客户ID")
     user = models.OneToOneField(
         User, 
         on_delete=models.CASCADE, 
@@ -114,7 +114,7 @@ class Client(models.Model):
 
 # -------------------------- 3. Staff 表（员工子类，关联User）--------------------------
 class Staff(models.Model):
-    staff_id = models.BigAutoField(primary_key=True, verbose_name="员工唯一ID")
+    staff_id = models.BigAutoField(primary_key=True, verbose_name="员工ID")
     user = models.OneToOneField(
         User, 
         on_delete=models.CASCADE, 
@@ -192,7 +192,7 @@ class DebitCard(models.Model):
 
 # -------------------------- 5. CreditCard 表（信用卡）--------------------------
 class CreditCard(models.Model):
-    credit_id = models.BigAutoField(primary_key=True, verbose_name="信用卡唯一ID")
+    credit_id = models.BigAutoField(primary_key=True, verbose_name="信用卡ID")
     user = models.ForeignKey(
         User, 
         on_delete=models.CASCADE, 
@@ -243,7 +243,7 @@ class CreditCard(models.Model):
 
 # -------------------------- 6. Transaction 表（交易记录）--------------------------
 class Transaction(models.Model):
-    transaction_id = models.BigAutoField(primary_key=True, verbose_name="交易唯一ID")
+    transaction_id = models.BigAutoField(primary_key=True, verbose_name="交易ID")
     subject_card_no = models.CharField(
         max_length=16, 
         null=False, 
