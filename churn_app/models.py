@@ -42,7 +42,7 @@ class Client(models.Model):
         choices=[(0, "正常"), (1, "流失预警")], 
         verbose_name="流失预警"
     )
-    age = models.PositiveTinyIntegerField(
+    age = models.PositiveSmallIntegerField(
         null=True, 
         blank=True, 
         verbose_name="年龄"
@@ -53,7 +53,7 @@ class Client(models.Model):
         choices=[("male", "男性"), ("female", "女性")], 
         verbose_name="性别"
     )
-    dependent_count = models.PositiveTinyIntegerField(
+    dependent_count = models.PositiveSmallIntegerField(
         null=True, 
         blank=True, 
         default=0, 
