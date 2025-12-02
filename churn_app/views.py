@@ -8,6 +8,7 @@ from .models import Client, Staff, DebitCard, CreditCard, Transaction
 from decimal import Decimal
 from django.db import transaction as db_transaction
 from .utils import predict_churn_dummy
+from rest_framework.authtoken.models import Token
 
 
 # User Register & Login
@@ -45,7 +46,14 @@ def login_view(request):
     if not user:
         return Response({"error": "Invalid credentials"}, status=401)
 
-    return Response({"message": "Login successful", "username": username})
+    # get or create token
+    token, created = Token.objects.get_or_create(user=user)
+
+    return Response({
+        "message": "Login successful",
+        "username": username,
+        "token": token.key
+    })
 
 
 # Profile
