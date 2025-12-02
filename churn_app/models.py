@@ -24,7 +24,7 @@ class Client(models.Model):
         null=True, 
         blank=True, 
         verbose_name="年龄"
-    )  # UNSIGNED 对应 PositiveTinyIntegerField（0-127，满足0-120需求）
+    )
     gender = models.CharField(
         max_length=6, 
         null=False, 
