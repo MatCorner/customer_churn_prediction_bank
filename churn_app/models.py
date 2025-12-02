@@ -2,28 +2,7 @@ from django.db import models
 from django.utils import timezone
 
 # -------------------------- 1. User 表（用户超类）--------------------------
-class User(models.Model):
-    user_id = models.BigAutoField(primary_key=True, verbose_name="用户ID")
-    username = models.CharField(max_length=50, unique=True, null=False, verbose_name="用户名")
-    password = models.CharField(max_length=100, null=False, verbose_name="密码")
-    create_time = models.DateTimeField(
-        null=False, 
-        default=timezone.now, 
-        verbose_name="账号创建时间"
-    )
-    update_time = models.DateTimeField(
-        null=False, 
-        auto_now=True, 
-        verbose_name="账号更新时间"
-    )
-
-    class Meta:
-        db_table = "User"  # 对应数据库表名
-        verbose_name = "用户"
-        verbose_name_plural = "用户"
-
-    def __str__(self):
-        return self.username
+from django.contrib.auth.models import User
 
 # -------------------------- 2. Client 表（客户子类，关联User）--------------------------
 class Client(models.Model):
@@ -31,7 +10,6 @@ class Client(models.Model):
     user = models.OneToOneField(
         User, 
         on_delete=models.CASCADE, 
-        to_field="user_id", 
         unique=True, 
         null=False, 
         verbose_name="关联用户"
@@ -42,7 +20,7 @@ class Client(models.Model):
         choices=[(0, "正常"), (1, "流失预警")], 
         verbose_name="流失预警"
     )
-    age = models.PositiveTinyIntegerField(
+    age = models.PositiveSmallIntegerField(
         null=True, 
         blank=True, 
         verbose_name="年龄"
@@ -53,7 +31,7 @@ class Client(models.Model):
         choices=[("male", "男性"), ("female", "女性")], 
         verbose_name="性别"
     )
-    dependent_count = models.PositiveTinyIntegerField(
+    dependent_count = models.PositiveSmallIntegerField(
         null=True, 
         blank=True, 
         default=0, 
@@ -118,7 +96,6 @@ class Staff(models.Model):
     user = models.OneToOneField(
         User, 
         on_delete=models.CASCADE, 
-        to_field="user_id", 
         null=False, 
         verbose_name="关联用户"
     )
@@ -143,7 +120,6 @@ class DebitCard(models.Model):
     user = models.ForeignKey(
         User, 
         on_delete=models.CASCADE, 
-        to_field="user_id", 
         null=False, 
         verbose_name="关联用户"
     )
@@ -196,7 +172,6 @@ class CreditCard(models.Model):
     user = models.ForeignKey(
         User, 
         on_delete=models.CASCADE, 
-        to_field="user_id", 
         null=False, 
         verbose_name="关联用户"
     )
