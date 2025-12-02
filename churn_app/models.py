@@ -125,7 +125,7 @@ class Staff(models.Model):
     position = models.CharField(
         max_length=50, 
         null=False, 
-        default="manager", 
+        default="staff", 
         verbose_name="职位"
     )
 
