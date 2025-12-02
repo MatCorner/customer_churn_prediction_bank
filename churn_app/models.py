@@ -221,7 +221,7 @@ class Transaction(models.Model):
     transaction_id = models.BigAutoField(primary_key=True, verbose_name="交易ID")
     subject_card_no = models.CharField(
         max_length=16, 
-        null=False, 
+        null=True, 
         verbose_name="交易主体卡号"
     )
     target_card_no = models.CharField(
@@ -232,7 +232,7 @@ class Transaction(models.Model):
     )  # 存款/取款时为空
     transaction_type = models.CharField(
         max_length=10, 
-        null=False, 
+        null=True, 
         choices=[
             ("remit", "汇款"),
             ("receive", "收款"),
@@ -249,8 +249,8 @@ class Transaction(models.Model):
         verbose_name="交易金额"
     )
     create_time = models.DateTimeField(
-        null=False, 
-        auto_now_add=True, 
+        null=False,
+        default=timezone.now,
         verbose_name="交易创建时间"
     )
     end_time = models.DateTimeField(
@@ -260,11 +260,10 @@ class Transaction(models.Model):
     )
     status = models.CharField(
         max_length=10, 
-        null=False, 
+        null=True, 
         choices=[
             ("success", "成功"),
-            ("failed", "失败"),
-            ("cancelled", "取消")
+            ("failed", "失败")
         ], 
         verbose_name="交易状态"
     )
