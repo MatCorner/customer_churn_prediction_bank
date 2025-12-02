@@ -1,13 +1,15 @@
 from django.urls import path
 from . import views
-from .views import create_transaction
 
 urlpatterns = [
-    path('register/', views.register, name='register'),
-    path('users/', views.list_users, name='list_users'),
-    path('login/', views.login, name='login'),
-    path('profile/<int:user_id>/', views.my_profile, name='my_profile'),
-    path('profile/<int:user_id>/update/', views.update_profile, name='update_profile'),
-    path('transaction/', create_transaction, name='create_transaction'),
-    
+    path("register/", views.register),
+    path("login/", views.login_view),
+    path("profile/", views.my_profile),
+    path("profile/update/", views.update_profile),
+    path("account/create/", views.create_account),
+    path("transaction/", views.create_transaction),
+    path("users/", views.list_users),
+    path("accounts/", views.list_accounts),
+    path("transactions/admin/", views.transaction_history),
+    path("transactions/me/", views.my_transactions),
 ]
