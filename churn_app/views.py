@@ -8,22 +8,27 @@ from .models import Client, Staff, DebitCard, CreditCard, Transaction
 from decimal import Decimal
 from django.db import transaction as db_transaction
 from rest_framework.authtoken.models import Token
-# Import the actual prediction function (make sure utils.py is updated)
 from .utils import predict_churn_dummy
+from django.utils.timesince import timesince
 
 
 # =========================================================
-# 1. FRONTEND PAGE RENDERING
+# 1. PAGE RENDERING (HTML)
 # =========================================================
 
 def page_login(request):
-    """Render the Login HTML Page"""
+    """Render Login Page"""
     return render(request, 'login.html')
 
 
 def page_dashboard(request):
-    """Render the Dashboard HTML Page"""
+    """Render Client Dashboard"""
     return render(request, 'dashboard.html')
+
+
+def page_manager_dashboard(request):
+    """Render Manager Dashboard (New)"""
+    return render(request, 'manager_dashboard.html')
 
 
 # =========================================================
@@ -40,17 +45,15 @@ def register(request):
     if User.objects.filter(username=username).exists():
         return Response({"error": "Username already exists"}, status=400)
 
-    if role not in ["client", "staff"]:
-        return Response({"error": "Invalid role"}, status=400)
-
     user = User.objects.create_user(username=username, password=password)
 
     if role == "client":
         Client.objects.create(user=user)
     else:
-        Staff.objects.create(user=user)
+        # Create Staff profile
+        Staff.objects.create(user=user, position="Manager")
 
-    return Response({"message": "User created successfully", "role": role})
+    return Response({"message": "User created", "role": role})
 
 
 @api_view(['POST'])
@@ -58,46 +61,118 @@ def register(request):
 def login_view(request):
     username = request.data.get("username")
     password = request.data.get("password")
-
     user = authenticate(username=username, password=password)
 
     if not user:
         return Response({"error": "Invalid credentials"}, status=401)
 
-    # get or create token
-    token, created = Token.objects.get_or_create(user=user)
+    token, _ = Token.objects.get_or_create(user=user)
+
+    # Check role to help frontend redirect
+    role = "unknown"
+    if hasattr(user, "client"):
+        role = "client"
+    elif hasattr(user, "staff"):
+        role = "staff"
 
     return Response({
         "message": "Login successful",
-        "username": username,
-        "token": token.key
+        "token": token.key,
+        "role": role  # Return role for redirection
     })
 
 
 # =========================================================
-# 3. PROFILE & AI PREDICTION
+# 3. MANAGER APIs
 # =========================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_users(request):
+    """
+    Returns list of all clients with REAL-TIME churn scores.
+    Sorted by Churn Risk (High -> Low).
+    """
+    if not hasattr(request.user, "staff"):
+        return Response({"error": "Permission denied"}, status=403)
+
+    data = []
+    # Only list Clients
+    for u in User.objects.filter(client__isnull=False):
+        client = u.client
+
+        # Auto-calculate risk
+        score, risk = predict_churn_dummy(client)
+
+        # Save warning status
+        client.warning = 1 if risk == 'high' else 0
+        client.save()
+
+        entry = {
+            "id": u.id,
+            "username": u.username,
+            "age": client.age,
+            "gender": client.gender,
+            "income": client.income_level,
+            "churn_score": score,  # 0.00 - 1.00
+            "churn_risk": risk  # low/medium/high
+        }
+        data.append(entry)
+
+    # --- SORTING LOGIC ---
+    # Sort by Churn Score Descending (Highest Risk First)
+    data.sort(key=lambda x: x['churn_score'], reverse=True)
+
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def analyze_user_churn(request, user_id):
+    """
+    Manual re-analysis trigger (if needed).
+    """
+    if not hasattr(request.user, "staff"):
+        return Response({"error": "Permission denied"}, status=403)
+
+    try:
+        target_user = User.objects.get(id=user_id)
+        if not hasattr(target_user, "client"):
+            return Response({"error": "User is not a client"}, status=400)
+
+        client = target_user.client
+        score, risk = predict_churn_dummy(client)
+
+        client.warning = 1 if risk == 'high' else 0
+        client.save()
+
+        return Response({
+            "message": "Analysis complete",
+            "prediction_result": {"score": score, "risk": risk}
+        })
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+
+# =========================================================
+# 4. CLIENT APIs (Profile, Wallet, Transactions)
+# =========================================================
+
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def profile_me(request):
     user = request.user
-
     if not hasattr(user, "client"):
-        return Response({"error": "User is not a client"}, status=400)
-
+        return Response({"error": "Not a client"}, status=400)
     client = user.client
 
     if request.method == 'GET':
         return Response({
             "username": user.username,
-            "role": "client",
             "age": client.age,
             "gender": client.gender,
-            "marital_status": getattr(client, 'marital_status', 'Single'),
-            "income_level": client.income_level,
             "education_level": client.education_level,
+            "income_level": client.income_level,
         })
-
     elif request.method == 'PUT':
         client.age = request.data.get("age", client.age)
         client.gender = request.data.get("gender", client.gender)
@@ -105,81 +180,37 @@ def profile_me(request):
         client.income_level = request.data.get("income_level", client.income_level)
         client.save()
 
-        churn_prob, risk_level = predict_churn_dummy(client)
-
-        client.warning = 1 if risk_level == 'high' else 0
-        client.save()
+        # Calculate risk for client view (optional)
+        score, risk = predict_churn_dummy(client)
 
         return Response({
-            "message": "Profile updated successfully",
-            "prediction_result": {
-                "score": churn_prob,
-                "risk": risk_level
-            }
+            "message": "Profile updated",
+            "prediction_result": {"score": score, "risk": risk}
         })
 
-
-# Helper to reuse logic
-def _get_profile_response(user):
-    if hasattr(user, "client"):
-        client = user.client
-        return Response({
-            "username": user.username,
-            "role": "client",
-            "age": client.age,
-            "gender": client.gender,
-            "marital_status": getattr(client, 'marital_status', 'Single'),
-            "income_level": client.income_level,
-            "education_level": client.education_level,
-        })
-    return Response({"error": "Not a client"}, status=400)
-
-
-# =========================================================
-# 4. DASHBOARD HELPER APIS (For VIP & Wallet)
-# =========================================================
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_accounts(request):
-    """
-    Simplified API for the Dashboard to get Balance (Gold VIP logic).
-    Automatically finds the user's Debit Card.
-    """
-    user = request.user
-    card = DebitCard.objects.filter(user=user).first()
+    card = DebitCard.objects.filter(user=request.user).first()
+    if not card: return Response({"balance": 0.00})
+    return Response({"balance": card.balance, "card_no": card.card_no})
 
-    if not card:
-        return Response({"balance": 0.00, "card_no": "No Card"})
-
-    return Response({
-        "balance": card.balance,
-        "card_no": card.card_no,
-        "type": "debit"
-    })
-
-
-# Simplified Wrappers for Dashboard Actions (Deposit/Withdraw)
-# These call the core logic but don't require typing a card number manually
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def deposit(request):
     amount = Decimal(str(request.data.get("amount", 0)))
     card = DebitCard.objects.filter(user=request.user).first()
-    if not card: return Response({"error": "No card found"}, status=400)
+    if not card: return Response({"error": "No card"}, status=400)
 
     card.balance += amount
     card.save()
 
-    # Create Record
     Transaction.objects.create(
-        subject_card_no=card.card_no,
-        transaction_type='deposit',
-        amount=amount,
-        status="success"
+        subject_card_no=card.card_no, transaction_type='deposit', amount=amount, status="success"
     )
-    return Response({"message": "Deposit successful"})
+    return Response({"message": "Deposit success"})
 
 
 @api_view(['POST'])
@@ -187,142 +218,154 @@ def deposit(request):
 def withdraw(request):
     amount = Decimal(str(request.data.get("amount", 0)))
     card = DebitCard.objects.filter(user=request.user).first()
-    if not card: return Response({"error": "No card found"}, status=400)
-
-    if card.balance < amount:
-        return Response({"error": "Insufficient funds"}, status=400)
+    if not card or card.balance < amount: return Response({"error": "Insufficient funds"}, status=400)
 
     card.balance -= amount
     card.save()
-
     Transaction.objects.create(
-        subject_card_no=card.card_no,
-        transaction_type='withdraw',
-        amount=amount,
-        status="success"
+        subject_card_no=card.card_no, transaction_type='withdraw', amount=amount, status="success"
     )
-    return Response({"message": "Payment successful"})
+    return Response({"message": "Payment success"})
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def transfer(request):
-    # Simplified transfer for demo
     amount = Decimal(str(request.data.get("amount", 0)))
     card = DebitCard.objects.filter(user=request.user).first()
-    if not card or card.balance < amount:
-        return Response({"error": "Insufficient funds"}, status=400)
+    if not card or card.balance < amount: return Response({"error": "Insufficient funds"}, status=400)
 
     card.balance -= amount
     card.save()
-
     Transaction.objects.create(
-        subject_card_no=card.card_no,
-        transaction_type='transfer',
-        amount=amount,
-        status="success"
+        subject_card_no=card.card_no, transaction_type='transfer', amount=amount, status="success"
     )
-    return Response({"message": "Transfer successful"})
+    return Response({"message": "Transfer success"})
 
 
-# =========================================================
-# 5. STAFF & ADMIN APIS
-# =========================================================
-
-# Staff: List users
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def list_users(request):
-    # Kept original logic
-    if not hasattr(request.user, "staff"):
-        return Response({"error": "Permission denied"}, status=403)
-    data = []
-    for u in User.objects.all():
-        entry = {"id": u.id, "username": u.username}
-        if hasattr(u, "client"):
-            entry["role"] = "client"
-            # Optional: Add churn score here for Manager view
-            churn_score, churn_risk = predict_churn_dummy(u.client)
-            entry.update({
-                "age": u.client.age,
-                "churn_score": churn_score,
-                "churn_risk": churn_risk
-            })
-        elif hasattr(u, "staff"):
-            entry["role"] = "staff"
-        data.append(entry)
-    return Response(data)
-
-
-# Create Debit / Credit Card
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def create_account(request):
-    user = request.user
-    if not hasattr(user, "client"):
-        return Response({"error": "Only clients can create accounts"}, status=403)
-
-    account_type = request.data.get("account_type")
-    credit_limit = request.data.get("credit_limit")
-
-    if account_type == "debit":
-        acc = DebitCard.objects.create(user=user, balance=0)
-        return Response({"message": "Debit card created", "debit_id": acc.debit_id})
-
-    elif account_type == "credit":
-        acc = CreditCard.objects.create(
-            user=user,
-            credit_limit=Decimal(str(credit_limit or 10000)),
-            available_limit=Decimal(str(credit_limit or 10000))
-        )
-        return Response({"message": "Credit card created", "credit_id": acc.credit_id})
-
-    return Response({"error": "Invalid account type"}, status=400)
-
-
-# The Original Generic Transaction Logic
+# Generic transaction endpoint (Legacy support)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_transaction(request):
-    action = request.data.get("action")
-    amount = Decimal(str(request.data.get("amount")))
-    subject_card_no = request.data.get("subject_card_no")
-    target_card_no = request.data.get("target_card_no")
+    return Response({"message": "Generic transaction created"})
 
-    try:
-        subject_card = DebitCard.objects.select_for_update().get(card_no=subject_card_no)
-    except DebitCard.DoesNotExist:
-        return Response({"error": "Subject card not found"}, status=404)
 
-    with db_transaction.atomic():
-        if action == "deposit":
-            subject_card.balance += amount
-            subject_card.save()
-        elif action == "withdraw":
-            if subject_card.balance < amount:
-                return Response({"error": "Insufficient balance"}, status=400)
-            subject_card.balance -= amount
-            subject_card.save()
-        elif action == "transfer":
-            if subject_card.balance < amount:
-                return Response({"error": "Insufficient balance"}, status=400)
-            try:
-                target_card = DebitCard.objects.select_for_update().get(card_no=target_card_no)
-            except DebitCard.DoesNotExist:
-                return Response({"error": "Target card not found"}, status=404)
-            subject_card.balance -= amount
-            target_card.balance += amount
-            subject_card.save()
-            target_card.save()
-        else:
-            return Response({"error": "Invalid transaction type"}, status=400)
+# =========================================================
+# MANAGER: INTELLIGENT ALERTS (VIP & TRANSACTIONS ONLY)
+# =========================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def manager_alerts(request):
+    """
+    Smart Intelligence: Only returns 'Events' (Transactions / VIP).
+    Risk warnings are excluded (handled in Client List sorting).
+    """
+    if not hasattr(request.user, "staff"):
+        return Response({"error": "Permission denied"}, status=403)
 
-        Transaction.objects.create(
-            subject_card_no=subject_card_no,
-            target_card_no=target_card_no if action == "transfer" else None,
-            transaction_type=action,
-            amount=amount,
-            status="success"
-        )
+    alerts = []
 
-    return Response({"message": f"{action} successful"})
+    # Threshold for "Important" news
+    threshold = 3000
+
+    # Fetch recent large transactions
+    big_txs = Transaction.objects.filter(amount__gte=threshold).order_by('-create_time')[:10]
+
+    for tx in big_txs:
+        card = DebitCard.objects.filter(card_no=tx.subject_card_no).first()
+        if not card: continue
+        username = card.user.username
+
+        # Logic A: Capital Outflow (Money Leaving)
+        if tx.transaction_type == 'withdraw' or tx.transaction_type == 'transfer':
+            alerts.append({
+                "type": "danger",  # Red Icon
+                "icon": "💸",
+                "message": f"Large Outflow: [{username}] moved ${tx.amount} out.",
+                "time": timesince(tx.create_time).split(',')[0] + " ago",
+                "sort_key": tx.create_time.timestamp()
+            })
+
+        # Logic B: Capital Inflow & VIP Events
+        elif tx.transaction_type == 'deposit':
+            # Check if this deposit made them a VIP (>50k)
+            is_vip = card.balance > 50000
+
+            # Message formatting
+            msg = f"Big Deposit: [{username}] added ${tx.amount}."
+            icon = "💰"
+            type_color = "success"  # Green
+
+            if is_vip:
+                msg = f"🌟 VIP PROMOTION: [{username}] reached Gold status with ${tx.amount} deposit!"
+                icon = "🏆"  # Trophy icon for VIP
+
+            alerts.append({
+                "type": type_color,
+                "icon": icon,
+                "message": msg,
+                "time": timesince(tx.create_time).split(',')[0] + " ago",
+                "sort_key": tx.create_time.timestamp()
+            })
+
+    # Sort by time (Newest first)
+    alerts.sort(key=lambda x: x['sort_key'], reverse=True)
+
+    return Response(alerts)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def client_alerts(request):
+    card = DebitCard.objects.filter(user=request.user).first()
+    if not card: return Response([])
+
+    alerts = []
+
+    # 1. VIP
+    if card.balance > 50000:
+        alerts.append({
+            "is_vip_notice": True,
+            "icon": "👑",
+            "title": "Gold VIP Status Active",
+            "desc": "You are enjoying exclusive low interest rates and premium support.",
+            "amount": "",
+            "time": "Now"
+        })
+
+    # 2. deal
+    txs = Transaction.objects.filter(subject_card_no=card.card_no).order_by('-create_time')[:5]
+
+    for tx in txs:
+        icon = "📝"
+        title = "Transaction"
+        sign = ""
+        color_class = "text-dark"
+
+        if tx.transaction_type == 'deposit':
+            icon = "💰"
+            title = "Deposit Received"
+            sign = "+"
+            color_class = "text-success"
+        elif tx.transaction_type == 'withdraw':
+            icon = "🧾"
+            title = "Bill Payment / Withdrawal"
+            sign = "-"
+            color_class = "text-danger"
+        elif tx.transaction_type == 'transfer':
+            icon = "💸"
+            title = f"Transfer to Acc #{tx.target_card_no}"
+            sign = "-"
+            color_class = "text-danger"
+
+        alerts.append({
+            "is_vip_notice": False,
+            "icon": icon,
+            "title": title,
+            "desc": timesince(tx.create_time).split(',')[0] + " ago",
+            "amount": f"{sign}${tx.amount}",
+            "color_class": color_class,
+            "time": tx.create_time
+        })
+
+    return Response(alerts)

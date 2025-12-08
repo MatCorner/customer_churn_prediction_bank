@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manager CRM Console</title>
+    <style>
+        /* --- CSS Variables --- */
+        :root {
+            --sidebar-bg: #1e272e;
+            --sidebar-active: #34495e;
+            --accent: #e67e22; /* Orange */
+            --bg-color: #ecf0f1;
+            --card-bg: #ffffff;
+            --text-main: #2c3e50;
+            --text-light: #7f8c8d;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --success: #27ae60;
+            --blue: #3498db;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- Sidebar --- */
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
+        .brand { font-size: 20px; font-weight: 800; text-align: center; padding: 30px 0; background: rgba(0,0,0,0.2); letter-spacing: 1px; color: var(--accent); }
+        .menu-item { padding: 18px 25px; cursor: pointer; border-left: 4px solid transparent; transition: 0.3s; color: #bdc3c7; font-size: 15px; display: flex; align-items: center; gap: 12px; }
+        .menu-item:hover { background-color: rgba(255,255,255,0.05); color: white; }
+        .menu-item.active { background-color: var(--sidebar-active); border-left-color: var(--accent); color: white; font-weight: 600; }
+        .logout-btn { margin-top: auto; color: var(--danger); padding: 20px; text-align: center; cursor: pointer; font-weight: bold; border-top: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
+        .logout-btn:hover { background-color: rgba(231, 76, 60, 0.1); }
+
+        /* --- Main Content --- */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .view-section { display: none; height: 100%; padding: 30px; overflow-y: auto; }
+        .view-section.active { display: block; animation: fadeIn 0.4s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- HOME VIEW --- */
+        .hero-banner {
+            background: linear-gradient(135deg, #2c3e50, #4ca1af);
+            color: white; padding: 40px; border-radius: 12px; margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(44, 62, 80, 0.3); position: relative; overflow: hidden;
+        }
+        .hero-banner h1 { margin: 0; font-size: 32px; font-weight: 300; }
+        .hero-banner h1 span { font-weight: 800; color: #f1c40f; }
+        .hero-banner p { opacity: 0.9; margin-top: 10px; font-size: 16px; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-bottom: 30px; }
+        .stat-card { background: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); display: flex; align-items: center; justify-content: space-between; border-bottom: 4px solid transparent; }
+        .stat-info h3 { margin: 0; font-size: 36px; color: var(--text-main); }
+        .stat-info span { color: var(--text-light); font-size: 13px; text-transform: uppercase; font-weight: bold; }
+        .stat-icon { font-size: 40px; opacity: 0.2; }
+
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 25px; }
+        .panel { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .panel h3 { margin-top: 0; color: var(--text-main); border-bottom: 1px solid #eee; padding-bottom: 15px; display:flex; justify-content:space-between; }
+
+        .alert-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f9f9f9; animation: slideIn 0.3s; }
+        @keyframes slideIn { from{opacity:0; transform:translateX(-10px);} to{opacity:1; transform:translateX(0);} }
+        .alert-text { font-size: 14px; color: #555; flex: 1; }
+        .alert-time { font-size: 12px; color: #aaa; white-space: nowrap; }
+
+        /* --- CLIENT MANAGEMENT VIEW --- */
+        .workspace { display: flex; height: 100%; gap: 25px; }
+        .client-list { width: 320px; background: white; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .list-search { padding: 20px; border-bottom: 1px solid #eee; }
+        .search-box { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background: #f9f9f9; }
+        .list-container { flex: 1; overflow-y: auto; }
+
+        .list-item { padding: 15px 20px; border-bottom: 1px solid #f5f5f5; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .list-item:hover { background: #f0f8ff; }
+        .list-item.selected { background: #eaf2f8; border-left: 4px solid var(--blue); }
+
+        /* Client Detail Area */
+        .client-detail { flex: 1; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+        .identity-card { background: white; padding: 25px; border-radius: 12px; display: flex; align-items: center; gap: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+        .avatar-circle { width: 70px; height: 70px; background: #dfe6e9; border-radius: 50%; font-size: 30px; display: flex; justify-content: center; align-items: center; }
+        .id-info { flex: 1; }
+        .id-info h2 { margin: 0; color: var(--text-main); }
+        .id-info span { color: var(--text-light); font-size: 14px; }
+        .risk-tag { padding: 8px 16px; border-radius: 30px; font-weight: bold; color: white; font-size: 14px; }
+
+        .metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .metric-box { background: white; padding: 20px; border-radius: 10px; text-align: center; border: 1px solid #eee; }
+        .m-label { display: block; font-size: 12px; color: #999; margin-bottom: 5px; text-transform: uppercase; }
+        .m-val { font-size: 18px; font-weight: bold; color: var(--text-main); }
+
+        .comm-hub { background: white; padding: 0; border-radius: 12px; flex: 1; display: flex; flex-direction: column; box-shadow: 0 4px 15px rgba(0,0,0,0.03); min-height: 300px; }
+        .hub-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .hub-title { font-size: 16px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+        .tabs { display: flex; background: #f8f9fa; border-bottom: 1px solid #ddd; }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; font-weight: 600; color: #7f8c8d; border-bottom: 3px solid transparent; transition: 0.3s; }
+        .tab:hover { background: #eee; }
+        .tab.active { color: var(--text-main); border-bottom-color: var(--accent); background: white; }
+        .tab-content { padding: 25px; flex: 1; background: white; border-radius: 0 0 12px 12px; font-size: 15px; line-height: 1.6; color: #444; }
+        .script-box { background: #fffcf5; border: 1px dashed #e6cfaa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .btn-action { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; float: right; }
+        .btn-action:hover { background: #d35400; }
+        .btn-scan { background: var(--blue); color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .btn-scan:hover { background: #2980b9; }
+
+        .hidden { display: none; }
+        .empty-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #bdc3c7; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="brand">MYBANK CRM</div>
+        <div class="menu-item active" onclick="switchView('home', this)">
+            <span>📊</span> Dashboard Overview
+        </div>
+        <div class="menu-item" onclick="switchView('clients', this)">
+            <span>👥</span> Client Management
+        </div>
+        <div class="logout-btn" onclick="logout()">LOGOUT SYSTEM</div>
+    </div>
+
+    <div class="main">
+
+        <div id="view-home" class="view-section active">
+            <div class="hero-banner">
+                <h1 id="welcome-msg">Good Morning, <span>Manager</span></h1>
+                <p>Real-time financial monitoring active. High-value transaction feed enabled.</p>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card" style="border-bottom-color: var(--blue);">
+                    <div class="stat-info">
+                        <h3 id="stat-total">-</h3>
+                        <span>Total Clients</span>
+                    </div>
+                    <div class="stat-icon">👥</div>
+                </div>
+                <div class="stat-card" style="border-bottom-color: var(--danger);">
+                    <div class="stat-info">
+                        <h3 id="stat-high" style="color: var(--danger)">-</h3>
+                        <span>Critical Risk (High)</span>
+                    </div>
+                    <div class="stat-icon">🚨</div>
+                </div>
+                <div class="stat-card" style="border-bottom-color: var(--success);">
+                    <div class="stat-info">
+                        <h3 id="stat-low" style="color: var(--success)">-</h3>
+                        <span>Safe & Loyal (Low)</span>
+                    </div>
+                    <div class="stat-icon">🛡️</div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="panel">
+                    <h3>
+                        <span>Live Financial Events</span>
+                        <span style="font-size:12px; font-weight:normal; color:#aaa">Large Tx & VIP News</span>
+                    </h3>
+                    <div id="alerts-container">
+                        <div style="padding:20px; color:#aaa; text-align:center;">Listening for transaction data...</div>
+                    </div>
+                </div>
+
+                <div class="panel" style="background: #f8f9fa; display:flex; align-items:center; justify-content:center; text-align:center;">
+                    <div>
+                        <div style="font-size:40px;">🎯</div>
+                        <h4 style="margin:10px 0;">Monthly Goal</h4>
+                        <p style="color:#777;">Maintain 95% Retention</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-clients" class="view-section">
+            <div class="workspace">
+                <div class="client-list">
+                    <div class="list-search">
+                        <div style="font-size:12px; color:#aaa; margin-bottom:5px; padding:0 5px;">SORTED BY RISK PRIORITY</div>
+                        <input type="text" class="search-box" placeholder="Search client..." onkeyup="filterList(this.value)">
+                    </div>
+                    <div class="list-container" id="client-list-container"></div>
+                </div>
+
+                <div class="client-detail">
+                    <div id="empty-state" class="empty-placeholder">
+                        <div style="font-size: 60px; margin-bottom:20px;">👈</div>
+                        <h2>Select a client to view analysis</h2>
+                        <p>High risk clients are prioritized at the top of the list.</p>
+                    </div>
+
+                    <div id="selected-content" class="hidden" style="display:none; flex-direction:column; gap:20px;">
+                        <div class="identity-card">
+                            <div class="avatar-circle">👤</div>
+                            <div class="id-info">
+                                <h2 id="d-name">User Name</h2>
+                                <span>Customer ID: #<span id="d-id">000</span></span>
+                            </div>
+                            <div class="risk-tag" id="d-risk-tag" style="background:gray;">UNKNOWN</div>
+                            <button class="btn-scan" onclick="refreshAnalysis()">⚡ Re-Scan Risk</button>
+                        </div>
+
+                        <div class="metrics-row">
+                            <div class="metric-box">
+                                <span class="m-label">Churn Probability</span>
+                                <span class="m-val" id="d-prob">0%</span>
+                            </div>
+                            <div class="metric-box">
+                                <span class="m-label">Age / Gender</span>
+                                <span class="m-val" id="d-demo">--</span>
+                            </div>
+                            <div class="metric-box">
+                                <span class="m-label">Income Level</span>
+                                <span class="m-val" id="d-income">--</span>
+                            </div>
+                            <div class="metric-box">
+                                <span class="m-label">Last Active</span>
+                                <span class="m-val">Today</span>
+                            </div>
+                        </div>
+
+                        <div class="comm-hub">
+                            <div class="hub-header">
+                                <div class="hub-title">📢 Communication Strategy Center</div>
+                            </div>
+                            <div class="tabs">
+                                <div class="tab active" onclick="switchTab('call')">📞 Phone Script</div>
+                                <div class="tab" onclick="switchTab('email')">✉️ Email Template</div>
+                                <div class="tab" onclick="switchTab('sms')">📱 SMS Push</div>
+                            </div>
+                            <div class="tab-content">
+                                <div id="script-container" class="script-box">Loading...</div>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="font-size:12px; color:#aaa;">AI Generated based on risk profile</span>
+                                    <button class="btn-action" onclick="alert('Action Logged!')">Mark as Contacted</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const API = '/api';
+        const token = localStorage.getItem('auth_token');
+        if(!token) window.location.href = '/api/page/login/';
+
+        let allUsers = [];
+        let currentUser = null;
+        let currentTab = 'call';
+
+        // --- Greeting ---
+        const hour = new Date().getHours();
+        let greetText = "Good Morning, ";
+        if(hour >= 12 && hour < 18) greetText = "Good Afternoon, ";
+        else if(hour >= 18) greetText = "Good Evening, ";
+        document.getElementById('welcome-msg').childNodes[0].nodeValue = greetText;
+
+        // --- Navigation ---
+        function switchView(view, el) {
+            document.querySelectorAll('.view-section').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.menu-item').forEach(e => e.classList.remove('active'));
+            document.getElementById(`view-${view}`).classList.add('active');
+            if(el) el.classList.add('active');
+            if(view === 'home') {
+                calculateStats();
+                loadAlerts();
+            }
+        }
+
+        function switchTab(type) {
+            currentTab = type;
+            document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+            event.target.classList.add('active');
+            renderScript();
+        }
+
+        function logout() { localStorage.clear(); window.location.href = '/api/page/login/'; }
+
+        // --- Data Loading ---
+        async function loadData() {
+            try {
+                // The API now returns the list ALREADY SORTED by risk
+                let res = await fetch(`${API}/users/`, { headers: {'Authorization': `Token ${token}`} });
+                if(res.status === 403) { alert("Access Denied"); logout(); return; }
+                allUsers = await res.json();
+                renderList(allUsers);
+                calculateStats();
+            } catch(e) { console.error(e); }
+        }
+
+        async function loadAlerts() {
+            try {
+                let res = await fetch(`${API}/manager/alerts/`, { headers: {'Authorization': `Token ${token}`} });
+                let alerts = await res.json();
+                const container = document.getElementById('alerts-container');
+                container.innerHTML = '';
+
+                if(alerts.length === 0) {
+                    container.innerHTML = '<div style="padding:20px; color:#aaa; text-align:center;">No major transactions recently.</div>';
+                    return;
+                }
+
+                alerts.forEach(a => {
+                    let color = 'var(--blue)';
+                    if(a.type === 'success') color = 'var(--success)';
+                    if(a.type === 'danger') color = 'var(--danger)';
+
+                    let iconDisplay = a.icon ?
+                        `<div style="font-size:16px; margin-right:15px;">${a.icon}</div>` :
+                        `<div class="alert-icon" style="background:${color}"></div>`;
+
+                    let html = `
+                        <div class="alert-item">
+                            ${iconDisplay}
+                            <div class="alert-text">${a.message}</div>
+                            <div class="alert-time">${a.time}</div>
+                        </div>
+                    `;
+                    container.innerHTML += html;
+                });
+            } catch(e) { console.error("Failed to load alerts"); }
+        }
+
+        // --- Stats & List ---
+        function calculateStats() {
+            let total = allUsers.length;
+            let high = allUsers.filter(u => u.churn_risk === 'high').length;
+            let low = allUsers.filter(u => u.churn_risk === 'low').length;
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-high').innerText = high;
+            document.getElementById('stat-low').innerText = low;
+        }
+
+        function renderList(users) {
+            const list = document.getElementById('client-list-container');
+            list.innerHTML = '';
+            users.forEach(u => {
+                let color = 'var(--success)';
+                if(u.churn_risk === 'high') color = 'var(--danger)';
+                else if(u.churn_risk === 'medium') color = 'var(--warning)';
+
+                let item = document.createElement('div');
+                item.className = 'list-item';
+                item.onclick = () => selectUser(u.id, item);
+                item.innerHTML = `
+                    <div>
+                        <div style="font-weight:bold; color:#2c3e50">${u.username}</div>
+                        <div style="font-size:12px; color:#95a5a6">ID: #${u.id}</div>
+                    </div>
+                    <div style="width:10px; height:10px; border-radius:50%; background:${color}"></div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function filterList(query) {
+            let filtered = allUsers.filter(u => u.username.toLowerCase().includes(query.toLowerCase()));
+            renderList(filtered);
+        }
+
+        function selectUser(id, el) {
+            currentUser = allUsers.find(u => u.id === id);
+            document.querySelectorAll('.list-item').forEach(e => e.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('selected-content').style.display = 'flex';
+
+            document.getElementById('d-name').innerText = currentUser.username;
+            document.getElementById('d-id').innerText = currentUser.id;
+            document.getElementById('d-demo').innerText = `${currentUser.age || '?'} yrs / ${currentUser.gender || '?'}`;
+            document.getElementById('d-income').innerText = currentUser.income || 'Unknown';
+            document.getElementById('d-prob').innerText = (currentUser.churn_score * 100).toFixed(1) + '%';
+
+            let tag = document.getElementById('d-risk-tag');
+            tag.innerText = currentUser.churn_risk.toUpperCase() + " RISK";
+            if(currentUser.churn_risk === 'high') tag.style.background = 'var(--danger)';
+            else if(currentUser.churn_risk === 'medium') tag.style.background = 'var(--warning)';
+            else tag.style.background = 'var(--success)';
+
+            renderScript();
+        }
+
+        function renderScript() {
+            if(!currentUser) return;
+            const container = document.getElementById('script-container');
+            const risk = currentUser.churn_risk;
+            const name = currentUser.username;
+
+            const scripts = {
+                high: {
+                    call: `<b>Operator:</b> "Hello ${name}, this is [Manager Name] from MyBank. I noticed you haven't accessed your premium benefits lately. Is there anything we can do to improve your experience?"<br><br><b>Offer:</b> "I can authorize a 1-month fee waiver if you make a deposit today."`,
+                    email: `Subject: Urgent: Your account status<br><br>Dear ${name},<br>We miss you at MyBank. We noticed your account activity has paused. Log in today to claim a $50 loyalty bonus.`,
+                    sms: `MyBank Alert: ${name}, your account is inactive. Deposit $100 today to unlock Gold Status benefits instantly. Reply STOP to unsubscribe.`
+                },
+                medium: {
+                    call: `<b>Operator:</b> "Hi ${name}, just checking in to see if you are satisfied with our mobile app features. We have a new Bill Pay function that saves you 3% on fees."`,
+                    email: `Subject: New Features Available<br><br>Hi ${name},<br>Did you know you can pay bills directly from your dashboard? Try it out today and improve your credit score.`,
+                    sms: `Hi ${name}, try our new 'Quick Transfer' feature in the app. It's faster and secure. Log in now.`
+                },
+                low: {
+                    call: `<b>Operator:</b> "Good afternoon ${name}, thank you for being a loyal member. I'm calling to inform you that you are pre-qualified for a credit limit increase."`,
+                    email: `Subject: You are a VIP!<br><br>Dear ${name},<br>Thanks for your continued trust. You are now eligible for our Platinum Rewards program.`,
+                    sms: `MyBank VIP: Thanks for being with us, ${name}. Check your email for a special reward.`
+                }
+            };
+
+            container.innerHTML = scripts[risk][currentTab] || "No script available.";
+        }
+
+        async function refreshAnalysis() {
+            if(!currentUser) return;
+            let btn = document.querySelector('.btn-scan');
+            btn.innerText = "Scanning...";
+            await fetch(`${API}/users/${currentUser.id}/analyze/`, {
+                method: 'POST', headers: {'Authorization': `Token ${token}`}
+            });
+            await loadData();
+            currentUser = allUsers.find(u => u.id === currentUser.id);
+            selectUser(currentUser.id, document.querySelector('.list-item.selected'));
+            btn.innerText = "⚡ Re-Scan Risk";
+            alert("Analysis Updated");
+        }
+
+        // Init
+        loadData();
+        loadAlerts();
+        setInterval(loadAlerts, 30000); // Poll every 30s
+
+    </script>
+</body>
+</html>
