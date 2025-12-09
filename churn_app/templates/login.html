@@ -1,35 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Bank Login</title>
+    <title>Bank System Login</title>
     <style>
         body { background: #2c3e50; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
         .box { background: white; padding: 40px; border-radius: 8px; width: 300px; text-align: center; }
-        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #1abc9c; color: white; border: none; cursor: pointer; }
+        input { width: 100%; padding: 12px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
+        button { width: 100%; padding: 12px; background: #1abc9c; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #16a085; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2>Secure Login</h2>
+        <h2 style="color: #2c3e50">Secure Login</h2>
         <input type="text" id="u" placeholder="Username">
         <input type="password" id="p" placeholder="Password">
-        <button onclick="login()">Login</button>
+        <button onclick="login()">Sign In</button>
     </div>
     <script>
         async function login() {
             let u = document.getElementById('u').value;
             let p = document.getElementById('p').value;
+
             let res = await fetch('/api/login/', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({username: u, password: p})
             });
+
             if(res.ok) {
                 let data = await res.json();
                 localStorage.setItem('auth_token', data.token);
-                window.location.href = '/api/dashboard/';
+
+                // Redirect based on ROLE returned by backend
+                if (data.role === 'staff') {
+                    window.location.href = '/api/manager/dashboard/';
+                } else {
+                    window.location.href = '/api/dashboard/';
+                }
             } else {
-                alert("Login Failed");
+                alert("Login Failed. Check credentials.");
             }
         }
     </script>
